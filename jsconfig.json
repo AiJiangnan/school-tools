@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "module": "esnext",
+        "jsx": "preserve",
+        "baseUrl": "./",
+        "moduleResolution": "node",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        }
+    },
+    "exclude": [
+        "node_modules",
+        "tmp",
+        ".git",
+        "dist"
+    ]
+}
