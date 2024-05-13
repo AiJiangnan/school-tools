@@ -1,17 +1,40 @@
 <template>
-    <a-button @click="() => openFile()">打开</a-button>
-    <a-modal width="600px" :closable="false" :open="open" @cancel="() => open = false" @ok="() => analyse()">
-        <a-tabs>
-            <a-tab-pane v-for="e in tableData" :key="e.name" :tab="e.name">
-                <a-table size="small" :pagination="false" :columns="tableHead" :dataSource="e.data"></a-table>
-            </a-tab-pane>
-        </a-tabs>
-    </a-modal>
+    <a-row>
+        <a-col :span="24">
+            <a-space wrap>
+                <a-button type="primary" @click="() => upload()">导入</a-button>
+                <a-button type="primary" @click="() => analyse()">分析</a-button>
+                <a-button type="primary" @click="() => download()">下载</a-button>
+            </a-space>
+        </a-col>
+    </a-row>
+    <a-row>
+        <a-col :span="12">
+            <div style="width:600px;">
+                <a-tabs>
+                    <a-tab-pane v-for="e in tableData" :key="e.name" :tab="e.name">
+                        <a-table size="small" :pagination="false" :columns="tableHead" :dataSource="e.data"></a-table>
+                    </a-tab-pane>
+                </a-tabs>
+            </div>
+        </a-col>
+        <a-col :span="12">
+            <div style="width:600px;">
+                <div>关爱分数：语文：{{ careScore.chinese }} 数学：{{ careScore.math }} 两科：{{ careScore.total }}</div>
+                <a-tabs>
+                    <a-tab-pane v-for="e in resultData" :key="e.key" :tab="e.name">
+                        <a-table size="small" :pagination="false" :columns="resultHead" :dataSource="e.data"></a-table>
+                    </a-tab-pane>
+                </a-tabs>
+            </div>
+        </a-col>
+    </a-row>
 </template>
 
-<script setup lang="js">
+<script setup>
+import { message } from "ant-design-vue";
 import xlsx from "node-xlsx";
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 
 const PASS_SCORE = 60
 const TOP_SCORE = 92.5
@@ -21,10 +44,28 @@ const CARE_SCORE_PERCENT = 0.8
 const fields = {
     '年级': 'grade', '班级': 'class', '学生姓名': 'name', '语文': 'chinese', '数学': 'math', '英语': 'english', '两科总分': 'total'
 }
-const open = ref(false)
 const excelData = ref([])
 const tableHead = ref([])
 const tableData = ref([])
+const careScore = ref({ chinese: 0, math: 0, total: 0 })
+const resultHead = ref([
+    { title: '班级', dataIndex: 'class', },
+    { title: '人数', dataIndex: 'count', },
+    { title: '平均分', dataIndex: 'average', },
+    { title: '及格人数', dataIndex: 'passCount', },
+    { title: '及格率', dataIndex: 'passRate', },
+    { title: '关爱人数', dataIndex: 'careCount', },
+    { title: '关爱率', dataIndex: 'careRate', },
+    { title: '特优人数', dataIndex: 'topCount', },
+    { title: '特优率', dataIndex: 'topRate', },
+])
+const resultData = ref([
+    { key: 'chinese', name: '语文', data: [] },
+    { key: 'math', name: '数学', data: [] },
+    { key: 'english', name: '英语', data: [] },
+    { key: 'two', name: '两科', data: [] },
+    { key: 'three', name: '三科', data: [] },
+])
 
 const pickerOpts = {
     types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }],
@@ -32,7 +73,7 @@ const pickerOpts = {
     multiple: false,
 };
 
-function openFile() {
+function upload() {
     return window.showOpenFilePicker(pickerOpts)
         .then(([fileHandle]) => fileHandle.getFile())
         .then(file => file.arrayBuffer())
@@ -49,7 +90,6 @@ function openFile() {
             ]
             tableData.value = data.map(parseTable)
         })
-        .then(() => open.value = true)
 }
 
 function parseTable(sheet) {
@@ -76,13 +116,41 @@ function parseTable(sheet) {
 
 function analyse() {
     const sheets = excelData.value
+    resultData.value.forEach(e => e.data = [])
 
     let [grade_chinese_score, grade_math_score, grade_total_score] = [[], [], []]
-    let [grade_total_count, grade_two_total_score, grade_two_pass_count, grade_two_top_count, grade_two_care_count,
-        grade_three_pass_count] = [0, 0, 0, 0, 0, 0]
-    let [grade_chinese_total_score, grade_chinese_pass_count, grade_chinese_top_count, grade_chinese_care_count] = [0, 0, 0, 0]
-    let [grade_math_total_score, grade_math_pass_count, grade_math_top_count, grade_math_care_count] = [0, 0, 0, 0]
-    let [grade_english_total_score, grade_english_pass_count] = [0, 0]
+
+    let grade = {
+        name: '校平',
+        // 年级总人数
+        count: 0,
+        // 年级关爱线
+        care: { chinese: 0, math: 0, total: 0 },
+        // 年级语文、数学、两科成绩数据
+        score: { chinese: [], math: [], total: [] },
+        // 年级语文统计：总分数、及格数、特优数、关爱数
+        chinese: {
+            score: 0, passCount: 0, topCount: 0, careCount: 0,
+            average: 0, passRate: 0, topRate: 0, careRate: 0,
+        },
+        // 年级数学统计：总分数、及格数、特优数、关爱数
+        math: {
+            score: 0, passCount: 0, topCount: 0, careCount: 0,
+            average: 0, passRate: 0, topRate: 0, careRate: 0,
+        },
+        // 年级英语统计：总分数、及格数
+        english: {
+            score: 0, passCount: 0,
+            average: 0, passRate: 0,
+        },
+        // 年级两科统计：总分数、及格数、特优数、关爱数
+        two: {
+            score: 0, passCount: 0, topCount: 0, careCount: 0,
+            average: 0, passRate: 0, topRate: 0, careRate: 0,
+        },
+        // 年级三科统计：及格数
+        three: { passCount: 0, passRate: 0, },
+    }
 
     // 计算关爱线
     for (let i = 0; i < sheets.length; i++) {
@@ -99,149 +167,159 @@ function analyse() {
 
     const sortFunc = (a, b) => b - a
     const care_score_index = parseInt(CARE_SCORE_PERCENT * grade_chinese_score.length)
-    const chinese_care_score = grade_chinese_score.sort(sortFunc)[care_score_index]
-    const math_care_score = grade_math_score.sort(sortFunc)[care_score_index]
-    const two_care_score = grade_total_score.sort(sortFunc)[care_score_index]
-
-    console.log('care_score:', chinese_care_score, math_care_score, two_care_score)
+    grade.care.chinese = grade_chinese_score.sort(sortFunc)[care_score_index]
+    grade.care.math = grade_math_score.sort(sortFunc)[care_score_index]
+    grade.care.total = grade_total_score.sort(sortFunc)[care_score_index]
+    careScore.value = grade.care
 
     for (let i = 0; i < sheets.length; i++) {
         const { name, data } = sheets[i]
 
-        let class_total_count = 0
-        let [two_total_score, two_pass_count, two_top_count, two_care_count, three_pass_count] = [0, 0, 0, 0, 0]
-        let [chinese_total_score, chinese_pass_count, chinese_top_count, chinese_care_count] = [0, 0, 0, 0]
-        let [math_total_score, math_pass_count, math_top_count, math_care_count] = [0, 0, 0, 0]
-        let [english_total_score, english_pass_count] = [0, 0]
+        let clazz = {
+            // 班级名称
+            name: '',
+            // 班级总人数
+            count: 0,
+            // 班级语文统计：总分数、及格数、特优数、关爱数
+            chinese: {
+                score: 0, passCount: 0, topCount: 0, careCount: 0,
+                average: 0, passRate: 0, topRate: 0, careRate: 0,
+            },
+            // 班级数学统计：总分数、及格数、特优数、关爱数
+            math: {
+                score: 0, passCount: 0, topCount: 0, careCount: 0,
+                average: 0, passRate: 0, topRate: 0, careRate: 0,
+            },
+            // 班级英语统计：总分数、及格数
+            english: {
+                score: 0, passCount: 0,
+                average: 0, passRate: 0,
+            },
+            // 班级两科统计：总分数、及格数、特优数、关爱数
+            two: {
+                score: 0, passCount: 0, topCount: 0, careCount: 0,
+                average: 0, passRate: 0, topRate: 0, careRate: 0,
+            },
+            // 班级三科统计：及格数
+            three: { passCount: 0, passRate: 0, },
+        }
 
         for (let j = 0; j < data.length; j++) {
-            let [grade, className, name, chinese, math, english, total] = data[j]
+            let [gradeName, className, name, chinese, math, english, total] = data[j]
 
-            if (!total) { total = english }
+            if (!total) { total = english, english = 0 }
 
             if (typeof chinese !== 'number' || typeof math !== 'number') { continue }
 
-            class_total_count++
-            two_total_score += total
-            chinese_total_score += chinese
-            math_total_score += math
-            english_total_score += english
+            clazz.name = className
+            clazz.count++
+            clazz.two.score += total
+            clazz.chinese.score += chinese
+            clazz.math.score += math
+            clazz.english.score += english
 
             if (chinese >= PASS_SCORE) {
-                chinese_pass_count++;
-                if (chinese >= TOP_SCORE) { chinese_top_count++ }
+                clazz.chinese.passCount++
+                if (chinese >= TOP_SCORE) { clazz.chinese.topCount++ }
                 if (math >= PASS_SCORE) {
-                    two_pass_count++
-                    if (total >= TWO_TOP_SCORE) { two_top_count++ }
-                    if (english && english >= PASS_SCORE) { three_pass_count++ }
+                    clazz.two.passCount++
+                    if (total >= TWO_TOP_SCORE) { clazz.two.topCount++ }
+                    if (english && english >= PASS_SCORE) { clazz.three.passCount++ }
                 }
             }
-            if (math >= PASS_SCORE) { math_pass_count++; if (math >= TOP_SCORE) { math_top_count++ } }
-            if (english && english >= PASS_SCORE) { english_pass_count++ }
+            if (math >= PASS_SCORE) { clazz.math.passCount++; if (math >= TOP_SCORE) { clazz.math.topCount++ } }
+            if (english && english >= PASS_SCORE) { clazz.english.passCount++ }
 
-            if (chinese <= chinese_care_score) { chinese_care_count++ }
-            if (math <= math_care_score) { math_care_count++ }
-            if (total <= two_care_score) { two_care_count++ }
+            if (chinese <= grade.care.chinese) { clazz.chinese.careCount++ }
+            if (math <= grade.care.math) { clazz.math.careCount++ }
+            if (total <= grade.care.total) { clazz.two.careCount++ }
         }
 
-        // 全校统计
-        grade_total_count += class_total_count
-        grade_two_total_score += two_total_score
-        grade_two_pass_count += two_pass_count
-        grade_two_top_count += two_top_count
-        grade_two_care_count += two_care_count
-        grade_three_pass_count += three_pass_count
+        grade.count += clazz.count
+        grade.two.score += clazz.two.score
+        grade.two.passCount += clazz.two.passCount
+        grade.two.topCount += clazz.two.topCount
+        grade.two.careCount += clazz.two.careCount
+        grade.three.passCount += clazz.three.passCount
 
-        grade_chinese_total_score += chinese_total_score
-        grade_chinese_pass_count += chinese_pass_count
-        grade_chinese_top_count += chinese_top_count
-        grade_chinese_care_count += chinese_care_count
+        grade.chinese.score += clazz.chinese.score
+        grade.chinese.passCount += clazz.chinese.passCount
+        grade.chinese.topCount += clazz.chinese.topCount
+        grade.chinese.careCount += clazz.chinese.careCount
 
-        grade_math_total_score += math_total_score
-        grade_math_pass_count += math_pass_count
-        grade_math_top_count += math_top_count
-        grade_math_care_count += math_care_count
+        grade.math.score += clazz.math.score
+        grade.math.passCount += clazz.math.passCount
+        grade.math.topCount += clazz.math.topCount
+        grade.math.careCount += clazz.math.careCount
 
-        grade_english_total_score += english_total_score
-        grade_english_pass_count += english_pass_count
+        grade.english.score += clazz.english.score
+        grade.english.passCount += clazz.english.passCount
 
-        // 两科及格人数,两科及格率,两科平均分,两科关爱率162,特优率
-        const two_total_avg = round(two_total_score / class_total_count / 2)
-        const two_pass_rate = round(two_pass_count / class_total_count * 100)
-        const two_care_rate = round((1 - two_care_count / class_total_count) * 100)
-        const two_top_rate = round(two_top_count / class_total_count * 100)
+        clazz.two.average = round(clazz.two.score / clazz.count / 2)
+        clazz.two.passRate = round(clazz.two.passCount / clazz.count * 100)
+        clazz.two.careRate = round((1 - clazz.two.careCount / clazz.count) * 100)
+        clazz.two.topRate = round(clazz.two.topCount / clazz.count * 100)
+        clazz.three.passRate = round(clazz.three.passCount / clazz.count * 100)
 
-        const chinese_total_avg = round(chinese_total_score / class_total_count)
-        const chinese_pass_rate = round(chinese_pass_count / class_total_count * 100)
-        const chinese_care_rate = round((1 - chinese_care_count / class_total_count) * 100)
-        const chinese_top_rate = round(chinese_top_count / class_total_count * 100)
+        clazz.chinese.average = round(clazz.chinese.score / clazz.count)
+        clazz.chinese.passRate = round(clazz.chinese.passCount / clazz.count * 100)
+        clazz.chinese.careRate = round((1 - clazz.chinese.careCount / clazz.count) * 100)
+        clazz.chinese.topRate = round(clazz.chinese.topCount / clazz.count * 100)
 
-        const math_total_avg = round(math_total_score / class_total_count)
-        const math_pass_rate = round(math_pass_count / class_total_count * 100)
-        const math_care_rate = round((1 - math_care_count / class_total_count) * 100)
-        const math_top_rate = round(math_top_count / class_total_count * 100)
+        clazz.math.average = round(clazz.math.score / clazz.count)
+        clazz.math.passRate = round(clazz.math.passCount / clazz.count * 100)
+        clazz.math.careRate = round((1 - clazz.math.careCount / clazz.count) * 100)
+        clazz.math.topRate = round(clazz.math.topCount / clazz.count * 100)
 
-        // console.table(name, class_total_count,
-        //     two_pass_count,
-        //     two_pass_rate,
-        //     two_total_avg,
-        //     two_care_rate,
-        //     two_top_rate)
+        clazz.english.average = round(clazz.english.score / clazz.count)
+        clazz.english.passRate = round(clazz.english.passCount / clazz.count * 100)
 
-        // console.table(name, class_total_count,
-        //     chinese_pass_count,
-        //     chinese_pass_rate,
-        //     chinese_total_avg,
-        //     chinese_care_rate,
-        //     chinese_top_rate)
-
-        console.table(name, class_total_count,
-            math_pass_count,
-            math_pass_rate,
-            math_total_avg,
-            math_care_rate,
-            math_top_rate)
-
-        // console.table(name, class_total_count, english_pass_count)
+        resultData.value[0].data.push({ class: clazz.name, count: clazz.count, ...clazz.chinese })
+        resultData.value[1].data.push({ class: clazz.name, count: clazz.count, ...clazz.math })
+        resultData.value[2].data.push({ class: clazz.name, count: clazz.count, ...clazz.english })
+        resultData.value[3].data.push({ class: clazz.name, count: clazz.count, ...clazz.two })
+        resultData.value[4].data.push({ class: clazz.name, count: clazz.count, ...clazz.three })
     }
 
-    const grade_two_total_avg = round(grade_two_total_score / grade_total_count / 2)
-    const grade_two_pass_rate = round(grade_two_pass_count / grade_total_count * 100)
-    const grade_two_top_rate = round(grade_two_top_count / grade_total_count * 100)
-    const grade_two_care_rate = round((1 - grade_two_care_count / grade_total_count) * 100)
+    grade.two.average = round(grade.two.score / grade.count / 2)
+    grade.two.passRate = round(grade.two.passCount / grade.count * 100)
+    grade.two.careRate = round((1 - grade.two.careCount / grade.count) * 100)
+    grade.two.topRate = round(grade.two.topCount / grade.count * 100)
+    grade.three.passRate = round(grade.three.passCount / grade.count * 100)
 
-    const grade_chinese_total_avg = round(grade_chinese_total_score / grade_total_count)
-    const grade_chinese_pass_rate = round(grade_chinese_pass_count / grade_total_count * 100)
-    const grade_chinese_top_rate = round(grade_chinese_top_count / grade_total_count * 100)
-    const grade_chinese_care_rate = round((1 - grade_chinese_care_count / grade_total_count) * 100)
+    grade.chinese.average = round(grade.chinese.score / grade.count)
+    grade.chinese.passRate = round(grade.chinese.passCount / grade.count * 100)
+    grade.chinese.careRate = round((1 - grade.chinese.careCount / grade.count) * 100)
+    grade.chinese.topRate = round(grade.chinese.topCount / grade.count * 100)
 
-    const grade_math_total_avg = round(grade_math_total_score / grade_total_count)
-    const grade_math_pass_rate = round(grade_math_pass_count / grade_total_count * 100)
-    const grade_math_top_rate = round(grade_math_top_count / grade_total_count * 100)
-    const grade_math_care_rate = round((1 - grade_math_care_count / grade_total_count) * 100)
+    grade.math.average = round(grade.math.score / grade.count)
+    grade.math.passRate = round(grade.math.passCount / grade.count * 100)
+    grade.math.careRate = round((1 - grade.math.careCount / grade.count) * 100)
+    grade.math.topRate = round(grade.math.topCount / grade.count * 100)
 
-    // console.table('校平', grade_total_count,
-    //     grade_two_pass_count,
-    //     grade_two_pass_rate,
-    //     grade_two_total_avg,
-    //     grade_two_care_rate,
-    //     grade_two_top_rate)
+    grade.english.average = round(grade.english.score / grade.count)
+    grade.english.passRate = round(grade.english.passCount / grade.count * 100)
 
-    // console.table('校平', grade_total_count,
-    //     grade_chinese_pass_count,
-    //     grade_chinese_pass_rate,
-    //     grade_chinese_total_avg,
-    //     grade_chinese_care_rate,
-    //     grade_chinese_top_rate)
+    resultData.value[0].data.push({ class: grade.name, count: grade.count, ...grade.chinese })
+    resultData.value[1].data.push({ class: grade.name, count: grade.count, ...grade.math })
+    resultData.value[2].data.push({ class: grade.name, count: grade.count, ...grade.english })
+    resultData.value[3].data.push({ class: grade.name, count: grade.count, ...grade.two })
+    resultData.value[4].data.push({ class: grade.name, count: grade.count, ...grade.three })
+}
 
-    console.table('校平', grade_total_count,
-        grade_math_pass_count,
-        grade_math_pass_rate,
-        grade_math_total_avg,
-        grade_math_care_rate,
-        grade_math_top_rate)
+function download() {
+    const sheets = []
+    resultData.value.forEach(sheet => {
+        const data = [['班级', '人数', '平均分', '及格人数', '及格率', '关爱人数', '关爱率', '特优人数', '特优率']]
+        sheet.data.forEach(e =>
+            data.push([e.class, e.count, e.average, e.passCount, e.passRate, e.careCount, e.careRate, e.topCount, e.topRate]))
+        sheets.push({ name: sheet.name, data })
+    })
 
-    open.value = false
+    const buffer = xlsx.build(sheets)
+    window.showOpenFilePicker(pickerOpts)
+        .then(([fileHandle]) => fileHandle.createWritable())
+        .then(w => { w.write(buffer); w.close(); message.success('下载成功！') })
 }
 
 function round(num) {
