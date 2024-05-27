@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "ant-design-vue": "^4.2.1",
+    "copy-to-clipboard": "^3.3.3",
     "node-xlsx": "^0.24.0",
+    "pinyin-pro": "^3.21.0",
     "vue": "^3.4.26",
     "vue-router": "^4.3.2"
   },

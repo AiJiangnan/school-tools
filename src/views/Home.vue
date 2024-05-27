@@ -51,6 +51,18 @@ const items = reactive([
             },
         ]
     },
+    {
+        key: '2',
+        label: '语文工具',
+        title: '语文工具',
+        children: [
+            {
+                key: '/pinyin',
+                label: '拼音转换',
+                title: '拼音转换',
+            },
+        ]
+    },
 ])
 
 function onOpenChange(openKeys) {

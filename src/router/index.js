@@ -4,6 +4,7 @@ const routes = [
   {
     path: '/', name: 'home', component: () => import('@/views/Home.vue'), children: [
       { path: '/analyze', name: 'analyze', component: () => import('@/views/NormalAnalyze.vue') },
+      { path: '/pinyin', name: 'pinyin', component: () => import('@/views/PinYin.vue') },
     ]
   },
 ]
