@@ -12,6 +12,7 @@ export function useScoreAnalyze() {
         '年级': 'grade', '班级': 'class', '学生姓名': 'name', '语文': 'chinese', '数学': 'math', '英语': 'english', '两科总分': 'total'
     }
 
+    const done = ref(false)
     const excelData = ref([])
     const tableHead = ref([])
     const tableData = ref([])
@@ -34,6 +35,13 @@ export function useScoreAnalyze() {
         { key: 'two', name: '两科', data: [] },
         { key: 'three', name: '三科', data: [] },
     ])
+    const careResult = ref([
+        { key: 'score', name: '关爱线', data: [] },
+        { key: 'chinese', name: '语文关爱生', data: [] },
+        { key: 'math', name: '数学关爱生', data: [] },
+        { key: 'english', name: '英语关爱生', data: [] },
+        { key: 'two', name: '两科关爱生', data: [] },
+    ])
 
     const pickerOpts = {
         types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }],
@@ -46,21 +54,63 @@ export function useScoreAnalyze() {
             .then(([fileHandle]) => fileHandle.getFile())
             .then(file => file.arrayBuffer())
             .then(buffer => xlsx.parse(buffer))
-            .then(data => {
-                excelData.value = data
+            .then(data => preHandle(data))
+    }
 
-                const head_row = data[0].data[0]
+    function preHandle(params) {
+        excelData.value = params
 
-                tableHead.value = [
-                    { title: '序号', dataIndex: 'no', customRender: ({ index }) => `${index + 1}`, },
-                    ...head_row.map(e => { return { title: e, dataIndex: fields[e] } }),
-                    { title: '两科总分', dataIndex: 'total' },
-                ]
-                tableData.value = data.map(parseTable)
-            })
+        // 表头行
+        const head_row = params[0].data[0]
+
+        // 元数据表格
+        tableHead.value = [
+            { title: '序号', dataIndex: 'no', customRender: ({ index }) => `${index + 1}`, },
+            ...head_row.map(e => { return { title: e, dataIndex: fields[e] } }),
+            { title: '两科总分', dataIndex: 'total' },
+        ]
+        tableData.value = params.map(parseTable)
+        done.value = false
+    }
+
+    function parseTable(sheet) {
+        const _sheet = { ...sheet }
+
+        // 表头行
+        const head = sheet.data[0]
+        _sheet.data.shift()
+
+        // 数据行：数组转对象
+        _sheet.data = _sheet.data.map(r => {
+            const _row = {}
+            r.forEach((e, i) => _row[fields[head[i]]] = e);
+
+            // 计算两科总分
+            if (typeof _row.chinese === 'number' && typeof _row.math === 'number') {
+                _row.total = _row.chinese + _row.math
+            } else {
+                _row.total = _row.chinese
+            }
+            // 增加两科部分
+            r.push(_row.total)
+
+            return _row
+        })
+        return _sheet
     }
 
     function analyse() {
+
+        if (done.value) {
+            message.warn('已经分析完成，请下载结果！')
+            return
+        }
+
+        if (excelData.value.length === 0) {
+            message.warn('请先上传成绩文件！')
+            return
+        }
+
         const sheets = excelData.value
         resultData.value.forEach(e => e.data = [])
 
@@ -98,28 +148,34 @@ export function useScoreAnalyze() {
             three: { passCount: 0, passRate: 0, },
         }
 
-        // 计算关爱线
+        // 第一次遍历：计算关爱线
         for (let i = 0; i < sheets.length; i++) {
             const { data } = sheets[i]
             for (let j = 0; j < data.length; j++) {
-                let [_grade, _className, _name, chinese, math, english, total] = data[j]
-                if (!total) { total = english }
+                let [_gradeName, _className, _name, chinese, math, english, total] = data[j]
+                // 过滤没有分数的学生
                 if (typeof chinese !== 'number' || typeof math !== 'number') { continue }
+                // 一、二年级没有英语科
+                if (!total) { total = english }
+
                 grade_chinese_score.push(chinese)
                 grade_math_score.push(math)
                 grade_total_score.push(total)
+                grade.count++
             }
         }
 
         const sortFunc = (a, b) => b - a
-        const care_score_index = parseInt(CARE_SCORE_PERCENT * grade_chinese_score.length)
+        const care_score_index = parseInt(CARE_SCORE_PERCENT * grade.count)
         grade.care.chinese = grade_chinese_score.sort(sortFunc)[care_score_index]
         grade.care.math = grade_math_score.sort(sortFunc)[care_score_index]
         grade.care.total = grade_total_score.sort(sortFunc)[care_score_index]
         careScore.value = grade.care
+        careResult.value[0].data.push({ ...grade.care })
 
+        // 第二次遍历：分析成绩
         for (let i = 0; i < sheets.length; i++) {
-            const { name, data } = sheets[i]
+            const { data } = sheets[i]
 
             let clazz = {
                 // 班级名称
@@ -130,21 +186,25 @@ export function useScoreAnalyze() {
                 chinese: {
                     score: 0, passCount: 0, topCount: 0, careCount: 0,
                     average: 0, passRate: 0, topRate: 0, careRate: 0,
+                    careStu: []
                 },
                 // 班级数学统计：总分数、及格数、特优数、关爱数
                 math: {
                     score: 0, passCount: 0, topCount: 0, careCount: 0,
                     average: 0, passRate: 0, topRate: 0, careRate: 0,
+                    careStu: []
                 },
                 // 班级英语统计：总分数、及格数
                 english: {
                     score: 0, passCount: 0,
                     average: 0, passRate: 0,
+                    careStu: []
                 },
                 // 班级两科统计：总分数、及格数、特优数、关爱数
                 two: {
                     score: 0, passCount: 0, topCount: 0, careCount: 0,
                     average: 0, passRate: 0, topRate: 0, careRate: 0,
+                    careStu: []
                 },
                 // 班级三科统计：及格数
                 three: { passCount: 0, passRate: 0, },
@@ -153,16 +213,17 @@ export function useScoreAnalyze() {
             for (let j = 0; j < data.length; j++) {
                 let [gradeName, className, name, chinese, math, english, total] = data[j]
 
-                if (!total) { total = english, english = 0 }
-
+                // 过滤没有分数的学生
                 if (typeof chinese !== 'number' || typeof math !== 'number') { continue }
+                // 一、二年级没有英语科
+                if (!total) { total = english, english = 0 }
 
                 clazz.name = className
                 clazz.count++
-                clazz.two.score += total
                 clazz.chinese.score += chinese
                 clazz.math.score += math
                 clazz.english.score += english
+                clazz.two.score += total
 
                 if (chinese >= PASS_SCORE) {
                     clazz.chinese.passCount++
@@ -173,15 +234,33 @@ export function useScoreAnalyze() {
                         if (english && english >= PASS_SCORE) { clazz.three.passCount++ }
                     }
                 }
-                if (math >= PASS_SCORE) { clazz.math.passCount++; if (math >= TOP_SCORE) { clazz.math.topCount++ } }
-                if (english && english >= PASS_SCORE) { clazz.english.passCount++ }
+                if (math >= PASS_SCORE) {
+                    clazz.math.passCount++;
+                    if (math >= TOP_SCORE) { clazz.math.topCount++ }
+                }
 
-                if (chinese <= grade.care.chinese) { clazz.chinese.careCount++ }
-                if (math <= grade.care.math) { clazz.math.careCount++ }
-                if (total <= grade.care.total) { clazz.two.careCount++ }
+                if (english) {
+                    if (english >= PASS_SCORE) {
+                        clazz.english.passCount++
+                    } else {
+                        clazz.english.careStu.push([gradeName, className, name, english])
+                    }
+                }
+
+                if (chinese <= grade.care.chinese) {
+                    clazz.chinese.careCount++
+                    clazz.chinese.careStu.push([gradeName, className, name, chinese])
+                }
+                if (math <= grade.care.math) {
+                    clazz.math.careCount++
+                    clazz.math.careStu.push([gradeName, className, name, math])
+                }
+                if (total <= grade.care.total) {
+                    clazz.two.careCount++
+                    clazz.two.careStu.push([gradeName, className, name, total])
+                }
             }
 
-            grade.count += clazz.count
             grade.two.score += clazz.two.score
             grade.two.passCount += clazz.two.passCount
             grade.two.topCount += clazz.two.topCount
@@ -225,6 +304,12 @@ export function useScoreAnalyze() {
             resultData.value[2].data.push({ class: clazz.name, count: clazz.count, ...clazz.english })
             resultData.value[3].data.push({ class: clazz.name, count: clazz.count, ...clazz.two })
             resultData.value[4].data.push({ class: clazz.name, count: clazz.count, ...clazz.three })
+
+            const sortFunc2 = (a, b) => b[3] - a[3]
+            careResult.value[1].data.push(...clazz.chinese.careStu.sort(sortFunc2))
+            careResult.value[2].data.push(...clazz.math.careStu.sort(sortFunc2))
+            careResult.value[3].data.push(...clazz.english.careStu.sort(sortFunc2))
+            careResult.value[4].data.push(...clazz.two.careStu.sort(sortFunc2))
         }
 
         grade.two.average = round(grade.two.score / grade.count / 2)
@@ -246,15 +331,18 @@ export function useScoreAnalyze() {
         grade.english.average = round(grade.english.score / grade.count)
         grade.english.passRate = round(grade.english.passCount / grade.count * 100)
 
-        resultData.value[0].data.push({ class: grade.name, count: grade.count, ...grade.chinese })
-        resultData.value[1].data.push({ class: grade.name, count: grade.count, ...grade.math })
-        resultData.value[2].data.push({ class: grade.name, count: grade.count, ...grade.english })
-        resultData.value[3].data.push({ class: grade.name, count: grade.count, ...grade.two })
-        resultData.value[4].data.push({ class: grade.name, count: grade.count, ...grade.three })
+        resultData.value[0].data.unshift({ class: grade.name, count: grade.count, ...grade.chinese })
+        resultData.value[1].data.unshift({ class: grade.name, count: grade.count, ...grade.math })
+        resultData.value[2].data.unshift({ class: grade.name, count: grade.count, ...grade.english })
+        resultData.value[3].data.unshift({ class: grade.name, count: grade.count, ...grade.two })
+        resultData.value[4].data.unshift({ class: grade.name, count: grade.count, ...grade.three })
+
+        done.value = true
     }
 
     function download() {
         const sheets = []
+
         resultData.value.forEach(sheet => {
             const data = [['班级', '人数', '平均分', '及格人数', '及格率', '关爱人数', '关爱率', '特优人数', '特优率']]
             sheet.data.forEach(e =>
@@ -262,31 +350,22 @@ export function useScoreAnalyze() {
             sheets.push({ name: sheet.name, data })
         })
 
+        const careHead = ['语文', '数学', '英语', '两科']
+        careResult.value.forEach((sheet, i) => {
+            if (i === 0) {
+                const data = [careHead]
+                sheet.data.forEach(e =>
+                    data.push([e.chinese, e.math, PASS_SCORE, e.total]))
+                sheets.push({ name: '关爱线', data })
+            } else {
+                const data = ['年级', '班级', '姓名', careHead[i - 1]]
+                sheets.push({ name: careHead[i - 1] + '关爱生', data: [data, ...sheet.data] })
+            }
+        })
+
         const buffer = xlsx.build(sheets)
 
         downloadFile(new File([buffer], 'result.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-    }
-
-    function parseTable(sheet) {
-        const _sheet = { ...sheet }
-        const head = sheet.data[0]
-
-        _sheet.data.shift()
-        _sheet.data = _sheet.data.map(r => {
-            const _row = {}
-            r.forEach((e, i) => _row[fields[head[i]]] = e);
-
-            // 计算两科总分
-            if (typeof _row.chinese === 'number' && typeof _row.math === 'number') {
-                _row.total = _row.chinese + _row.math
-            } else {
-                _row.total = _row.chinese
-            }
-            r.push(_row.total)
-
-            return _row
-        })
-        return _sheet
     }
 
     function round(num) {
@@ -302,5 +381,5 @@ export function useScoreAnalyze() {
         document.body.removeChild(elem);
     }
 
-    return { careScore, tableHead, tableData, resultHead, resultData, upload, analyse, download }
+    return { done, careScore, tableHead, tableData, resultHead, resultData, upload, analyse, download }
 }

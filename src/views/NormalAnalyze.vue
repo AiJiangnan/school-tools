@@ -8,7 +8,7 @@
                 <a-button ref="ref1" type="primary" @click="() => upload()">1. 导入</a-button>
                 <a-button ref="ref2" type="primary" @click="() => analyse()">2. 分析</a-button>
                 <a-button ref="ref3" type="primary" @click="() => download()">3. 下载</a-button>
-                <a-button type="link" @click="() => open = true">帮助</a-button>
+                <a-button type="link" @click="() => { open = true; current = 0 }">帮助</a-button>
             </a-space>
         </a-col>
         <a-col :span="12">
@@ -21,7 +21,7 @@
             </div>
         </a-col>
         <a-col :span="12">
-            <div style="width:600px;">
+            <div v-if="done" style="width:600px;">
                 <div>关爱分数：语文：{{ careScore.chinese }} 数学：{{ careScore.math }} 两科：{{ careScore.total }}</div>
                 <a-tabs>
                     <a-tab-pane v-for="e in resultData" :key="e.key" :tab="e.name">
@@ -39,7 +39,7 @@
 import { useScoreAnalyze } from '@/components/base/ScoreAnalyze';
 import { ref } from 'vue';
 
-const { careScore, tableHead, tableData, resultHead, resultData, upload, analyse, download } = useScoreAnalyze()
+const { done, careScore, tableHead, tableData, resultHead, resultData, upload, analyse, download } = useScoreAnalyze()
 
 const open = ref(false);
 const ref1 = ref(null);
