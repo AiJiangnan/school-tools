@@ -7,7 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/school-tools/',
+  // base: '/school-tools/',
   plugins: [
     vue(),
     Components({ resolvers: [AntDesignVueResolver({ importStyle: false, }),] }),
