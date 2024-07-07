@@ -1,7 +1,7 @@
 <template>
     <a-row :gutter="[0, 16]">
         <a-col :span="24">
-            <a-alert banner closable message="注意：本工具无后台服务，不会上传任何信息和文件，请放心使用。" />
+            <a-alert banner closable message="注意：本工具无后台服务，不会上传任何信息和文件，请放心使用。最近更新：新增关爱平均分" />
         </a-col>
         <a-col :span="24">
             <a-space wrap>
@@ -22,7 +22,6 @@
         </a-col>
         <a-col :span="12">
             <div v-if="done" style="width:600px;">
-                <div>关爱分数：语文：{{ careScore.chinese }} 数学：{{ careScore.math }} 两科：{{ careScore.total }}</div>
                 <a-tabs>
                     <a-tab-pane v-for="e in resultData" :key="e.key" :tab="e.name">
                         <a-table size="small" :pagination="false" :columns="resultHead" :dataSource="e.data"></a-table>
@@ -39,7 +38,7 @@
 import { useScoreAnalyze } from '@/components/base/ScoreAnalyze';
 import { ref } from 'vue';
 
-const { done, careScore, tableHead, tableData, resultHead, resultData, upload, analyse, download } = useScoreAnalyze()
+const { done, tableHead, tableData, resultHead, resultData, upload, analyse, download } = useScoreAnalyze()
 
 const open = ref(false);
 const ref1 = ref(null);
