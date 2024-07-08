@@ -254,7 +254,6 @@ export function useScoreAnalyze() {
     }
 
     function download() {
-        console.log(done.value)
         if (!done.value) {
             message.warning('请先分析成绩！')
             return
