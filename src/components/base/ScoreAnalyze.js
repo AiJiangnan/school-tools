@@ -189,7 +189,7 @@ export function useScoreAnalyze() {
             const classInfo = new ClassInfo()
 
             for (let j = 0; j < data.length; j++) {
-                let { class: className, name, chinese, math, english, two } = data[j]
+                let { grade, class: className, name, chinese, math, english, two } = data[j]
                 english = english || 0
 
                 // 过滤没有语文、数学分数的学生
@@ -222,10 +222,10 @@ export function useScoreAnalyze() {
                     }
                 }
 
-                classInfo.chinese.pushCareStu([gradeInfo, classInfo, name, chinese])
-                classInfo.math.pushCareStu([gradeInfo, classInfo, name, math])
-                if (english) { classInfo.english.pushCareStu([gradeInfo, classInfo, name, english]) }
-                classInfo.two.pushCareStu([gradeInfo, classInfo, name, two])
+                classInfo.chinese.pushCareStu([grade, className, name, chinese])
+                classInfo.math.pushCareStu([grade, className, name, math])
+                if (english) { classInfo.english.pushCareStu([grade, className, name, english]) }
+                classInfo.two.pushCareStu([grade, className, name, two])
 
                 gradeInfo.plusCount()
             }
