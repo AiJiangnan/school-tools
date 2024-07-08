@@ -1,12 +1,9 @@
 import { message } from "ant-design-vue";
-import xlsx from "node-xlsx";
 import { ref } from "vue";
+import { read, utils, writeFileXLSX } from "xlsx";
 
 const [PASS_SCORE, TOP_SCORE, TWO_TOP_SCORE, CARE_SCORE_PERCENT] = [60, 92.5, 92.5 * 2, 0.2]
 const subject = ['chinese', 'math', 'english', 'two', 'three']
-const fields = {
-    '年级': 'grade', '班级': 'class', '学生姓名': 'name', '语文': 'chinese', '数学': 'math', '英语': 'english', '两科总分': 'two'
-}
 
 function round(params) {
     return Math.round(params * 100) / 100;
@@ -103,8 +100,16 @@ class ClassScore {
 export function useScoreAnalyze() {
     const done = ref(false)
     const excelData = ref([])
-    const tableHead = ref([])
-    const tableData = ref([])
+    const tableHead = ref([
+        { title: '序号', dataIndex: 'no', customRender: ({ index }) => `${index + 1}`, },
+        { title: '年级', dataIndex: 'grade' },
+        { title: '班级', dataIndex: 'class' },
+        { title: '学生姓名', dataIndex: 'name' },
+        { title: '语文', dataIndex: 'chinese', sorter: (a, b) => a.chinese - b.chinese },
+        { title: '数学', dataIndex: 'math', sorter: (a, b) => a.math - b.math },
+        { title: '英语', dataIndex: 'english', sorter: (a, b) => a.english - b.english },
+        { title: '两科总分', dataIndex: 'two', sorter: (a, b) => a.two - b.two },
+    ])
     const resultHead = ref([
         { title: '班级', dataIndex: 'class', },
         { title: '人数', dataIndex: 'count', },
@@ -139,55 +144,24 @@ export function useScoreAnalyze() {
         return window.showOpenFilePicker(pickerOpts)
             .then(([fileHandle]) => fileHandle.getFile())
             .then(file => file.arrayBuffer())
-            .then(buffer => xlsx.parse(buffer))
-            .then(data => preHandle(data))
+            .then(buffer => read(buffer))
+            .then(wb => preHandle(wb))
     }
 
-    function preHandle(params) {
-        // Excel元数据
-        excelData.value = params
+    function preHandle(wb) {
 
-        // 表头行
-        const head_row = params[0].data[0]
-        if (head_row.length !== 5 && head_row.length !== 6) {
-            console.error(head_row)
-            message.error('成绩数据格式错误！')
-        }
+        excelData.value = wb.SheetNames.map(sheet => {
+            const json = utils.sheet_to_json(wb.Sheets[sheet])
+            const data = json.map(({ 年级: grade, 班级: clazz, 学生姓名: name, 语文: chinese, 数学: math, 英语: english }) => {
 
-        // 元数据表格
-        tableHead.value = [
-            { title: '序号', dataIndex: 'no', customRender: ({ index }) => `${index + 1}`, },
-            ...head_row.map(e => { return { title: e, dataIndex: fields[e] } }),
-            { title: '两科总分', dataIndex: 'two' },
-        ]
-        tableData.value = params.map(parseTable)
-        done.value = false
-    }
+                const two = (typeof chinese === 'number' && typeof math === 'number') ? (chinese + math) : chinese
 
-    function parseTable(sheet) {
-        const _sheet = { ...sheet }
-
-        // 表头行
-        const head = sheet.data[0]
-        _sheet.data.shift()
-
-        // 数据行：数组转对象
-        _sheet.data = _sheet.data.map(r => {
-            const _row = {}
-            r.forEach((e, i) => _row[fields[head[i]]] = e);
-
-            // 计算两科总分
-            if (typeof _row.chinese === 'number' && typeof _row.math === 'number') {
-                _row.two = _row.chinese + _row.math
-            } else {
-                _row.two = _row.chinese
-            }
-            // 增加两科部分
-            r.push(_row.two)
-
-            return _row
+                return { grade, class: clazz, name, chinese, math, english, two }
+            })
+            return { sheet, data }
         })
-        return _sheet
+
+        done.value = false
     }
 
     function analyse() {
@@ -202,119 +176,107 @@ export function useScoreAnalyze() {
             return
         }
 
-        const sheets = excelData.value
         resultData.value.forEach(e => e.data = [])
         careResult.value.forEach(e => e.data = [])
 
-        const grade = new ClassInfo('校平')
+        const gradeInfo = new ClassInfo('校平')
 
         // 第二次遍历：分析成绩
+        const sheets = excelData.value
         for (let i = 0; i < sheets.length; i++) {
             const { data } = sheets[i]
 
-            const clazz = new ClassInfo()
+            const classInfo = new ClassInfo()
 
             for (let j = 0; j < data.length; j++) {
-                let [gradeName, className, name, chinese, math, ...english_and_two] = data[j]
+                let { class: className, name, chinese, math, english, two } = data[j]
+                english = english || 0
 
                 // 过滤没有语文、数学分数的学生
                 if (typeof chinese !== 'number' || typeof math !== 'number') { continue }
 
-                let english, two
-                // 区分低年级没有英语科目
-                if (english_and_two.length === 1) {
-                    [english, two] = [0, english_and_two[0]]
-                } else if (english_and_two.length === 2) {
-                    [english, two] = english_and_two
-                }
-
-                clazz.name = className
-                clazz.plusCount()
-                clazz.chinese.plusScore(chinese)
-                clazz.math.plusScore(math)
-                clazz.english.plusScore(english)
-                clazz.two.plusScore(two)
+                classInfo.name = className
+                classInfo.plusCount()
+                classInfo.chinese.plusScore(chinese)
+                classInfo.math.plusScore(math)
+                classInfo.english.plusScore(english)
+                classInfo.two.plusScore(two)
 
                 if (chinese >= PASS_SCORE) {
-                    clazz.chinese.plusPassCount()
-                    if (chinese >= TOP_SCORE) { clazz.chinese.plusTopCount() }
+                    classInfo.chinese.plusPassCount()
+                    if (chinese >= TOP_SCORE) { classInfo.chinese.plusTopCount() }
                     if (math >= PASS_SCORE) {
-                        clazz.two.plusPassCount()
-                        if (two >= TWO_TOP_SCORE) { clazz.two.plusTopCount() }
-                        if (english && english >= PASS_SCORE) { clazz.three.plusPassCount() }
+                        classInfo.two.plusPassCount()
+                        if (two >= TWO_TOP_SCORE) { classInfo.two.plusTopCount() }
+                        if (english && english >= PASS_SCORE) { classInfo.three.plusPassCount() }
                     }
                 }
                 if (math >= PASS_SCORE) {
-                    clazz.math.plusPassCount()
-                    if (math >= TOP_SCORE) { clazz.math.plusTopCount() }
+                    classInfo.math.plusPassCount()
+                    if (math >= TOP_SCORE) { classInfo.math.plusTopCount() }
                 }
 
                 if (english) {
                     if (english >= PASS_SCORE) {
-                        clazz.english.plusPassCount()
+                        classInfo.english.plusPassCount()
                     }
                 }
 
-                clazz.chinese.pushCareStu([gradeName, className, name, chinese])
-                clazz.math.pushCareStu([gradeName, className, name, math])
-                if (english) { clazz.english.pushCareStu([gradeName, className, name, english]) }
-                clazz.two.pushCareStu([gradeName, className, name, two])
+                classInfo.chinese.pushCareStu([gradeInfo, classInfo, name, chinese])
+                classInfo.math.pushCareStu([gradeInfo, classInfo, name, math])
+                if (english) { classInfo.english.pushCareStu([gradeInfo, classInfo, name, english]) }
+                classInfo.two.pushCareStu([gradeInfo, classInfo, name, two])
 
-                grade.plusCount()
+                gradeInfo.plusCount()
             }
 
-            grade.plus(clazz)
-            clazz.calc()
+            gradeInfo.plus(classInfo)
+            classInfo.calc()
 
             // 导出班级分析结果
             subject.forEach((e, i) => {
                 // 导出分析结果
-                resultData.value[i].data.push({ class: clazz.name, count: clazz.count, ...clazz[e] })
+                resultData.value[i].data.push({ class: classInfo.name, count: classInfo.count, ...classInfo[e] })
                 // 导出关爱学生列表
                 if (i < 4) {
-                    careResult.value[i].data.push(...clazz[e].careStu)
+                    careResult.value[i].data.push(...classInfo[e].careStu)
 
                 }
             })
         }
 
-        grade.calc()
+        gradeInfo.calc()
 
         // 导出校平分析结果
-        subject.forEach((e, i) => { resultData.value[i].data.unshift({ class: grade.name, count: grade.count, ...grade[e] }) })
+        subject.forEach((e, i) => { resultData.value[i].data.unshift({ class: gradeInfo.name, count: gradeInfo.count, ...gradeInfo[e] }) })
 
         done.value = true
     }
 
     function download() {
-        const sheets = []
+        console.log(done.value)
+        if (!done.value) {
+            message.warning('请先分析成绩！')
+            return
+        }
+
+        const wb = utils.book_new()
 
         resultData.value.forEach(sheet => {
             const data = [resultHead.value.map(e => e.title)]
             sheet.data.forEach(e =>
                 data.push([e.class, e.count, e.average, e.passCount, e.passRate, e.careScore, e.topCount, e.topRate]))
-            sheets.push({ name: sheet.name, data })
+            utils.book_append_sheet(wb, utils.aoa_to_sheet(data), sheet.name)
         })
 
         const careHead = ['语文', '数学', '英语', '两科']
         careResult.value.forEach((sheet, i) => {
-            const data = ['年级', '班级', '姓名', careHead[i]]
-            sheets.push({ name: careHead[i] + '关爱生', data: [data, ...sheet.data] })
+            const data = [['年级', '班级', '姓名', careHead[i]], ...sheet.data]
+            utils.book_append_sheet(wb, utils.aoa_to_sheet(data), `${careHead[i]}关爱生`)
         })
 
-        const buffer = xlsx.build(sheets)
-
-        downloadFile(new File([buffer], 'result.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+        writeFileXLSX(wb, 'result.xlsx')
     }
 
-    function downloadFile(file) {
-        const elem = window.document.createElement('a');
-        elem.href = window.URL.createObjectURL(file);
-        elem.download = file.name;
-        document.body.appendChild(elem);
-        elem.click();
-        document.body.removeChild(elem);
-    }
-
-    return { done, tableHead, tableData, resultHead, resultData, upload, analyse, download }
+    return { done, tableHead, excelData, resultHead, resultData, upload, analyse, download }
 }
