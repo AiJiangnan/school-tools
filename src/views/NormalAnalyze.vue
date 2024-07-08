@@ -11,8 +11,8 @@
                 <a-button type="link" @click="() => { open = true; current = 0 }">帮助</a-button>
             </a-space>
         </a-col>
-        <a-col :span="12">
-            <div style="width:600px;">
+        <a-col :span="24">
+            <div style="width:800px;">
                 <a-tabs>
                     <a-tab-pane v-for="e in tableData" :key="e.name" :tab="e.name">
                         <a-table size="small" :pagination="false" :columns="tableHead" :dataSource="e.data"></a-table>
@@ -20,17 +20,15 @@
                 </a-tabs>
             </div>
         </a-col>
-        <a-col :span="12">
-            <div v-if="done" style="width:600px;">
-                <a-tabs>
-                    <a-tab-pane v-for="e in resultData" :key="e.key" :tab="e.name">
-                        <a-table size="small" :pagination="false" :columns="resultHead" :dataSource="e.data"></a-table>
-                    </a-tab-pane>
-                </a-tabs>
-            </div>
-        </a-col>
+        <a-drawer :open="done" size="large" title="成绩分析结果" @close="() => done = false">
+            <a-alert banner closable type="success" message="注意：更多详细分析结果点击下载。" />
+            <a-tabs>
+                <a-tab-pane v-for="e in resultData" :key="e.key" :tab="e.name">
+                    <a-table size="small" :pagination="false" :columns="resultHead" :dataSource="e.data"></a-table>
+                </a-tab-pane>
+            </a-tabs>
+        </a-drawer>
     </a-row>
-
     <a-tour v-model:current="current" v-bind="{ open, steps, onClose: () => open = false }" />
 </template>
 
