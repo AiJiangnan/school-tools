@@ -43,19 +43,22 @@
                 <a-typography-text strong type="danger">年级、班级、学生姓名、语文、数学、英语（可选）</a-typography-text>
             </a-typography-paragraph>
             <a-typography-paragraph>
+                不计排名规则：只有当语文、数学其中一个成绩不为数字时，不会计入统计中；如果语文、数学都有成绩，英语没有成绩时，会计算错误，当存在这种情况时，需要确定成绩是否计入排名。
+            </a-typography-paragraph>
+            <a-typography-paragraph>
                 导入成绩后，可以通过切换标签页，查看各个班级的各科成绩情况，并且支持对各科进行排序。
             </a-typography-paragraph>
-            <a-image src="/1.png"/>
+            <a-image src="/1.png" />
             <a-typography-title :level="3">2. 分析</a-typography-title>
             <a-typography-paragraph>
                 第二步：点击分析按钮，分析班级各个指标，结果弹窗展示，切换标签页面查看每个班级的情况。
             </a-typography-paragraph>
-            <a-image src="/2.png"/>
+            <a-image src="/2.png" />
             <a-typography-title :level="3">3. 下载</a-typography-title>
             <a-typography-paragraph>
                 第三步：点击下载按钮，下载各个班级详情的分析结果，包含各个班级的各个指标，以及关爱学生名单。
             </a-typography-paragraph>
-            <a-image src="/3.png"/>
+            <a-image src="/3.png" />
         </a-typography>
     </a-modal>
 </template>
